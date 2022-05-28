@@ -2,7 +2,7 @@ const redis = require('redis')
 
 const client = redis.createClient({
   port: 6379,
-  host: 'http://34.221.70.16',
+  host: 'admin:pw@ec2-34-221-70-16.us-west-2.compute.amazonaws.com',
   // password: "password"
 })
 
