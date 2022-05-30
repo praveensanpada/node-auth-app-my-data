@@ -1,8 +1,8 @@
 const mongoose = require('mongoose')
 
 mongoose
-  .connect(process.env.MONGODB_URI, {
-    dbName: process.env.DB_NAME,
+  .connect("mongodb://localhost:27017", {
+    dbName: "nomoex_app",
     useNewUrlParser: true,
     useUnifiedTopology: true,
     useFindAndModify: false,
