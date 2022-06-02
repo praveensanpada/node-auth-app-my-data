@@ -8,6 +8,8 @@ router.post('/login', AuthController.login)
 
 router.post('/send-email-otp', AuthController.createEmailOtp)
 
+router.post('/verify-email-otp', AuthController.verifyEmailOtp)
+
 router.post('/refresh-token', AuthController.refreshToken)
 
 router.delete('/logout', AuthController.logout)
