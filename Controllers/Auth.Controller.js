@@ -289,5 +289,93 @@ module.exports = {
     } catch (error) {
       console.log(error)
     }
-  }
+  },
+  
+    createEmailOtp: async (req, res, next) => {
+
+    let {
+      email,
+    } = req.body;
+
+    if (email == undefined || email == null || email == "") {
+      return res.status(500).json({
+        success: false,
+        status_code: 500,
+        showUser: 1,
+        message: "BODY MISSING PARAMETERS..."
+      });
+    } else if (emailvalidator.validate(email)) {
+      const otp = Math.floor(1000 + Math.random() * 9000);
+      const ttl = 60 * 60 * 1000;
+      const expires = new Date().getTime() + ttl;
+      const otpData = `${email}.${otp}.${expires}`;
+      const OTP_KEY = "pnc1234"
+      const hash = crypto.createHmac("sha256", OTP_KEY).update(otpData).digest("hex");
+      const fullHash = `${hash}.${expires}`;
+      return res.status(200).json({
+        success: true,
+        status_code: 200,
+        message: "OTP SENT SUCCESSFULLY...",
+        response: {
+          emailOtpKey: fullHash,
+          emailOtp: otp
+        }
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        status_code: 500,
+        showUser: 1,
+        message: "PLEASE ENTER CORRECT EMAIL ID..."
+      });
+    }
+  },
+
+  verifyEmailOtp: async (req, res, next) => {
+
+    let {
+      email,
+      emailOtpKey,
+      otp
+    } = req.body;
+
+    let [hashValue, expires] = emailOtpKey.split(".");
+    const OTP_KEY = "pnc1234"
+    let now = new Date().getTime();
+    if (now > parseInt(expires)) {
+      const otp = Math.floor(1000 + Math.random() * 9000);
+      const ttl = 60 * 60 * 1000;
+      const expires = new Date().getTime() + ttl;
+      const data1 = `${email}.${otp}.${expires}`;
+      const OTP_KEY = "pnc1234"
+      const hash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
+      const fullHash = `${hash}.${expires}`;
+      return res.status(200).json({
+        success: true,
+        status_code: 200,
+        message: "OTP SENT SUCCESSFULLY..",
+        response: {
+          emailOtpKey: fullHash,
+          otp: otp
+        }
+      });
+    }
+    let data1 = `${email}.${otp}.${expires}`;
+    let newCalculatedHash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
+    if (newCalculatedHash === hashValue) {
+      return res.status(200).json({
+        success: true,
+        status_code: 200,
+        message: "USER VERIFIED SUCCESSFULLY..."
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        status_code: 500,
+        showUser: 1,
+        message: "VERIFICATION FAILED..."
+      });
+    }
+  },
+  
 }
