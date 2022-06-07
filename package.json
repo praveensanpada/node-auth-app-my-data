@@ -1,0 +1,29 @@
+{
+  "name": "nomoex_app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hapi/joi": "^17.1.1",
+    "bcrypt": "^5.0.0",
+    "dotenv": "^8.2.0",
+    "email-validator": "^2.0.4",
+    "express": "^4.17.1",
+    "http-errors": "^1.7.3",
+    "ioredis": "^5.0.6",
+    "jsonwebtoken": "^8.5.1",
+    "mongodb": "^4.6.0",
+    "mongoose": "^5.9.19",
+    "morgan": "^1.10.0",
+    "nodemon": "^2.0.4",
+    "otp-generator": "^4.0.0",
+    "redis": "^3.0.2",
+    "validate-phone-number-node-js": "0.0.1"
+  }
+}
