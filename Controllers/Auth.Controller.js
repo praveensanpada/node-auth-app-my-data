@@ -7,12 +7,12 @@ const {
 const client = require('../helpers/init_redis')
 var conn = require('../helpers/init_mongodb');
 var bcrypt = require('bcrypt');
-const otpGenerator = require('otp-generator');
-const crypto = require('crypto');
 var { compareSync } = require('bcrypt');
 const emailvalidator = require("email-validator");
 const validatePhoneNumber = require('validate-phone-number-node-js');
-
+const crypto = require('crypto');
+var custom_message = require("../custom/custom_message")
+var custom_error = require("../custom/custom_error")
 
 module.exports = {
 
@@ -31,39 +31,44 @@ module.exports = {
     if (email == undefined || email == null || email == "" || firstName == undefined || firstName == null || firstName == "" || lastName == undefined || lastName == null || lastName == "" || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || otp == undefined || otp == null || otp == "" || password == undefined || password == null || password == "") {
       return res.status(500).json({
         success: false,
-        status_code: 500,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
         showUser: 1,
-        message: "BODY MISSING PARAMETERS..."
+        message: custom_message.BODY_MISSING_PARAMS
       });
     } else if (!emailvalidator.validate(email)) {
       return res.status(500).json({
         success: false,
-        status_code: 500,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
         showUser: 1,
-        message: "PLEASE ENTER CORRECT EMAIL ID..."
+        message: custom_message.EMAIL_VALIDATION
       });
     } else if (!validatePhoneNumber.validate(phoneNumber)) {
       return res.status(500).json({
         success: false,
-        status_code: 500,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
         showUser: 1,
-        message: "PLEASE ENTER CORRECT PHONE NUMBER..."
+        message: custom_message.PHONE_VALIDATION
       });
     } else {
       let user_email_check = await conn.collection('users').find({ $or: [{ email: email }, { phoneNumber: phoneNumber }] }).toArray();
       if (user_email_check.length > 0) {
         return res.status(500).json({
           success: false,
-          status_code: 500,
+          status_code: custom_error.CODE_500,
+          status_msg: custom_error.MSG_500,
           showUser: 1,
-          message: "EMAIL ALREADY EXITS..."
+          message: custom_message.EMAIL_PHONE_NOT_FOUND
         });
       } else {
+
         let [hashValue, expires] = emailOtpKey.split(".");
         const OTP_KEY = "pnc1234"
         let now = new Date().getTime();
         if (now > parseInt(expires)) {
-          const otp = otpGenerator.generate(4, { alphabets: false, upperCase: false, specialChars: false });
+          const otp = Math.floor(1000 + Math.random() * 9000);
           const ttl = 60 * 60 * 1000;
           const expires = new Date().getTime() + ttl;
           const data1 = `${email}.${otp}.${expires}`;
@@ -72,8 +77,10 @@ module.exports = {
           const fullHash = `${hash}.${expires}`;
           return res.status(200).json({
             success: true,
-            status_code: 200,
-            message: "OTP SENT SUCCESSFULLY..",
+            status_code: custom_error.CODE_200,
+            status_msg: custom_error.MSG_200,
+            showUser: 1,
+            message: custom_message.OTP_SENT,
             response: {
               emailOtpKey: fullHash,
               otp: otp
@@ -83,6 +90,7 @@ module.exports = {
         let data1 = `${email}.${otp}.${expires}`;
         let newCalculatedHash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
         if (newCalculatedHash === hashValue) {
+
           let hashPass = await bcrypt.hash(password, 10);
           let insertOne = await conn.collection('users').insertOne({
             "email": email,
@@ -108,22 +116,24 @@ module.exports = {
           res.setHeader("accessToken", accessToken);
           return res.status(200).json({
             success: true,
-            status_code: 200,
+            status_code: custom_error.CODE_200,
+            status_msg: custom_error.MSG_200,
+            showUser: 1,
             uuid: myUuid,
-            message: "USER CREATED SUCCESSFULLY..."
+            message: custom_message.USER_CREATED
           });
         } else {
           return res.status(500).json({
             success: false,
-            status_code: 500,
+            status_code: custom_error.CODE_500,
+            status_msg: custom_error.MSG_500,
             showUser: 1,
-            message: "VERIFICATION FAILED..."
+            message: custom_message.VERIFICATION_FAILED
           });
         }
       }
     }
   },
-
 
   login: async (req, res, next) => {
 
@@ -137,16 +147,18 @@ module.exports = {
         success: false,
         status_code: 500,
         showUser: 1,
-        message: "BODY MISSING PARAMETERS..."
+        message: custom_message.BODY_MISSING_PARAMS
       });
     } else if (!emailvalidator.validate(email)) {
       return res.status(500).json({
         success: false,
-        status_code: 500,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
         showUser: 1,
-        message: "PLEASE ENTER CORRECT EMAIL ID..."
+        message: custom_message.EMAIL_VALIDATION
       });
     } else {
+
       let user_email_check = await conn.collection('users').findOne({ email: email });
       if (user_email_check) {
         const check_pass = await compareSync(password, user_email_check.password);
@@ -158,69 +170,32 @@ module.exports = {
           res.setHeader("accessToken", accessToken);
           return res.status(200).json({
             success: true,
-            status_code: 200,
+            status_code: custom_error.CODE_200,
+            status_msg: custom_error.MSG_200,
             uuid: myUuid,
-            message: "USER LOGIN SUCCESSFULLY..."
+            email: "*****" + email.slice(-15),
+            message: custom_message.USER_LOGIN
           });
         } else {
           return res.status(500).json({
             success: false,
-            status_code: 500,
+            status_code: custom_error.CODE_500,
+            status_msg: custom_error.MSG_500,
             showUser: 1,
-            message: "WRONG PASSWORD..."
+            message: custom_message.WRONG_PASSWORD
           });
         }
       } else {
         return res.status(500).json({
           success: false,
-          status_code: 500,
+          status_code: custom_error.CODE_500,
+          status_msg: custom_error.MSG_500,
           showUser: 1,
-          message: "EMAIL NOT EXIT..."
+          message: custom_message.EMAIL_NOT_FOUND
         });
       }
     }
   },
-
-  createEmailOtp: async (req, res, next) => {
-    let {
-      email,
-    } = req.body;
-
-    if (email == undefined || email == null || email == "") {
-      return res.status(500).json({
-        success: false,
-        status_code: 500,
-        showUser: 1,
-        message: "BODY MISSING PARAMETERS..."
-      });
-    } else if (emailvalidator.validate(email)) {
-      const otp = otpGenerator.generate(4, { alphabets: false, upperCase: false, specialChars: false });
-      const ttl = 60 * 60 * 1000;
-      const expires = new Date().getTime() + ttl;
-      const otpData = `${email}.${otp}.${expires}`;
-      const OTP_KEY = "pnc1234"
-      const hash = crypto.createHmac("sha256", OTP_KEY).update(otpData).digest("hex");
-      const fullHash = `${hash}.${expires}`;
-      return res.status(200).json({
-        success: true,
-        status_code: 200,
-        message: "OTP SENT SUCCESSFULLY...",
-        response: {
-          emailOtpKey: fullHash,
-          emailOtp: otp
-        }
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        status_code: 500,
-        showUser: 1,
-        message: "PLEASE ENTER CORRECT EMAIL ID..."
-      });
-    }
-  },
-
-
 
   refreshToken: async (req, res, next) => {
     try {
@@ -247,10 +222,12 @@ module.exports = {
           console.log(err.message)
           throw createError.InternalServerError()
         }
-        return res.status(204).json({
+        return res.status(200).json({
           success: true,
-          status_code: 200,
-          message: "USER LOGOUT SUCCESSFULLY..."
+          status_code: custom_error.CODE_200,
+          status_msg: custom_error.MSG_200,
+          showUser: 1,
+          message: custom_message.USER_LOGOUT
         });
       })
     } catch (error) {
@@ -264,24 +241,27 @@ module.exports = {
         if (err) {
           return res.status(500).json({
             success: false,
-            status_code: 500,
+            status_code: custom_error.CODE_500,
+            status_msg: custom_error.MSG_500,
             showUser: 1,
-            message: "DATABASE CONNECTION ERROR..."
+            message: custom_message.DB_CONN_ERROR
           });
         } else {
           if (data.length > 0) {
             return res.status(200).json({
               success: true,
-              status_code: 200,
+              status_code: custom_error.CODE_200,
+              status_msg: custom_error.MSG_200,
               response: data,
-              message: "USERS FETCHED SUCCESSFULLY..."
+              message: custom_message.USER_FETCHED
             });
           } else {
             return res.status(500).json({
               success: false,
-              status_code: 500,
+              status_code: custom_error.CODE_500,
+              status_msg: custom_error.MSG_500,
               showUser: 1,
-              message: "USER NOT EXITS..."
+              message: custom_message.USER_NOT_EXIT
             });
           }
         }
@@ -290,8 +270,8 @@ module.exports = {
       console.log(error)
     }
   },
-  
-    createEmailOtp: async (req, res, next) => {
+
+  createEmailOtp: async (req, res, next) => {
 
     let {
       email,
@@ -300,9 +280,10 @@ module.exports = {
     if (email == undefined || email == null || email == "") {
       return res.status(500).json({
         success: false,
-        status_code: 500,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
         showUser: 1,
-        message: "BODY MISSING PARAMETERS..."
+        message: custom_message.BODY_MISSING_PARAMS
       });
     } else if (emailvalidator.validate(email)) {
       const otp = Math.floor(1000 + Math.random() * 9000);
@@ -314,8 +295,10 @@ module.exports = {
       const fullHash = `${hash}.${expires}`;
       return res.status(200).json({
         success: true,
-        status_code: 200,
-        message: "OTP SENT SUCCESSFULLY...",
+        status_code: custom_error.CODE_200,
+        status_msg: custom_error.MSG_200,
+        showUser: 1,
+        message: custom_message.OTP_SENT,
         response: {
           emailOtpKey: fullHash,
           emailOtp: otp
@@ -324,9 +307,10 @@ module.exports = {
     } else {
       return res.status(500).json({
         success: false,
-        status_code: 500,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
         showUser: 1,
-        message: "PLEASE ENTER CORRECT EMAIL ID..."
+        message: custom_message.EMAIL_VALIDATION
       });
     }
   },
@@ -352,8 +336,10 @@ module.exports = {
       const fullHash = `${hash}.${expires}`;
       return res.status(200).json({
         success: true,
-        status_code: 200,
-        message: "OTP SENT SUCCESSFULLY..",
+        status_code: custom_error.CODE_200,
+        status_msg: custom_error.MSG_200,
+        showUser: 1,
+        message: custom_message.OTP_SENT,
         response: {
           emailOtpKey: fullHash,
           otp: otp
@@ -365,17 +351,144 @@ module.exports = {
     if (newCalculatedHash === hashValue) {
       return res.status(200).json({
         success: true,
-        status_code: 200,
-        message: "USER VERIFIED SUCCESSFULLY..."
+        status_code: custom_error.CODE_200,
+        status_msg: custom_error.MSG_200,
+        showUser: 1,
+        message: custom_message.VERIFICATION_SUCCESS
       });
     } else {
       return res.status(500).json({
         success: false,
-        status_code: 500,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
         showUser: 1,
-        message: "VERIFICATION FAILED..."
+        message: custom_message.VERIFICATION_FAILED
       });
     }
   },
-  
+
+
+  createPhoneOtp: async (req, res, next) => {
+
+    let {
+      phoneNumber,
+    } = req.body;
+
+    if (phoneNumber == undefined || phoneNumber == null || phoneNumber == "") {
+      return res.status(500).json({
+        success: false,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
+        showUser: 1,
+        message: custom_message.BODY_MISSING_PARAMS
+      });
+    } else if (validatePhoneNumber.validate(phoneNumber)) {
+      let user_phone_check = await conn.collection('users').findOne({ phoneNumber: phoneNumber });
+      if (user_phone_check) {
+        const otp = Math.floor(1000 + Math.random() * 9000);
+        const ttl = 60 * 60 * 1000;
+        const expires = new Date().getTime() + ttl;
+        const otpData = `${phoneNumber}.${otp}.${expires}`;
+        const OTP_KEY = "pnc1234"
+        const hash = crypto.createHmac("sha256", OTP_KEY).update(otpData).digest("hex");
+        const fullHash = `${hash}.${expires}`;
+        return res.status(200).json({
+          success: true,
+          status_code: custom_error.CODE_200,
+          status_msg: custom_error.MSG_200,
+          showUser: 1,
+          message: custom_message.OTP_SENT,
+          response: {
+            emailOtpKey: fullHash,
+            emailOtp: otp
+          }
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          status_code: custom_error.CODE_500,
+          status_msg: custom_error.MSG_500,
+          showUser: 1,
+          message: custom_message.PHONE_NOT_FOUND
+        });
+      }
+    } else {
+      return res.status(500).json({
+        success: false,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
+        showUser: 1,
+        message: custom_message.PHONE_VALIDATION
+      });
+    }
+  },
+
+  verifyPhoneOtp: async (req, res, next) => {
+
+    let {
+      phoneNumber,
+      phoneOtpKey,
+      otp
+    } = req.body;
+
+    let [hashValue, expires] = phoneOtpKey.split(".");
+    const OTP_KEY = "pnc1234"
+    let now = new Date().getTime();
+    if (now > parseInt(expires)) {
+      const otp = Math.floor(1000 + Math.random() * 9000);
+      const ttl = 60 * 60 * 1000;
+      const expires = new Date().getTime() + ttl;
+      const data1 = `${phoneNumber}.${otp}.${expires}`;
+      const OTP_KEY = "pnc1234"
+      const hash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
+      const fullHash = `${hash}.${expires}`;
+      return res.status(200).json({
+        success: true,
+        status_code: custom_error.CODE_200,
+        status_msg: custom_error.MSG_200,
+        showUser: 1,
+        message: custom_message.OTP_SENT,
+        response: {
+          phoneOtpKey: fullHash,
+          otp: otp
+        }
+      });
+    }
+    let data1 = `${phoneNumber}.${otp}.${expires}`;
+    let newCalculatedHash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
+    if (newCalculatedHash === hashValue) {
+      let updateQuery = { phoneNumber: phoneNumber };
+      var updateQueryData = { $set: { isPhoneVerified: 1 } };
+      conn.collection('users').updateOne(updateQuery, updateQueryData, function (err, data) {
+        if (err) {
+          return res.status(500).json({
+            success: false,
+            status_code: custom_error.CODE_500,
+            status_msg: custom_error.MSG_500,
+            showUser: 1,
+            message: custom_message.DB_CONN_ERROR
+          });
+        } else {
+          return res.status(200).json({
+            success: true,
+            status_code: custom_error.CODE_200,
+            status_msg: custom_error.MSG_200,
+            showUser: 1,
+            message: custom_message.VERIFICATION_SUCCESS
+          });
+        }
+      })
+    } else {
+      return res.status(500).json({
+        success: false,
+        status_code: custom_error.CODE_500,
+        status_msg: custom_error.MSG_500,
+        showUser: 1,
+        message: custom_message.VERIFICATION_FAILED
+      });
+    }
+  },
+
+
+
 }
