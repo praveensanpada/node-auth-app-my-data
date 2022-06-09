@@ -1,10 +1,5 @@
 const createError = require('http-errors')
-const {
-    signAccessToken,
-    signRefreshToken,
-    verifyRefreshToken,
-} = require('../helpers/jwt_helper')
-const client = require('../helpers/init_redis')
+const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../helpers/jwt_helper')
 var conn = require('../helpers/init_mongodb');
 var bcrypt = require('bcrypt');
 var { compareSync } = require('bcrypt');
@@ -17,11 +12,12 @@ var ObjectId = require('mongodb').ObjectId;
 
 module.exports = {
 
+    // ---------------------------custom signup start-----------------------------
+
     signup: async (req, res, next) => {
 
         let {
             email,
-            phoneNumber,
             firstName,
             lastName,
             password,
@@ -45,63 +41,43 @@ module.exports = {
                 showUser: 1,
                 message: custom_message.EMAIL_VALIDATION
             });
-        } else if (!validatePhoneNumber.validate(phoneNumber)) {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.PHONE_VALIDATION
-            });
         } else {
-            let user_email_check = await conn.collection('users').find({ $or: [{ email: email }, { phoneNumber: phoneNumber }] }).toArray();
+            let user_email_check = await conn.collection('users').find({ email: email }).toArray();
+            console.log(user_email_check)
             if (user_email_check.length > 0) {
                 return res.status(500).json({
                     success: false,
                     status_code: custom_error.CODE_500,
                     status_msg: custom_error.MSG_500,
                     showUser: 1,
-                    message: custom_message.EMAIL_PHONE_FOUND
+                    message: custom_message.EMAIL_FOUND
                 });
             } else {
-
                 let [hashValue, expires] = emailOtpKey.split(".");
-                const OTP_KEY = "pnc1234"
                 let now = new Date().getTime();
                 if (now > parseInt(expires)) {
-                    const otp = Math.floor(1000 + Math.random() * 9000);
-                    const ttl = 60 * 60 * 1000;
-                    const expires = new Date().getTime() + ttl;
-                    const data1 = `${email}.${otp}.${expires}`;
-                    const OTP_KEY = "pnc1234"
-                    const hash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
-                    const fullHash = `${hash}.${expires}`;
-                    return res.status(200).json({
-                        success: true,
-                        status_code: custom_error.CODE_200,
-                        status_msg: custom_error.MSG_200,
+                    return res.status(500).json({
+                        success: false,
+                        status_code: custom_error.CODE_500,
+                        status_msg: custom_error.MSG_500,
                         showUser: 1,
-                        message: custom_message.OTP_SENT,
-                        response: {
-                            emailOtpKey: fullHash,
-                            otp: otp
-                        }
+                        isEmailOtpExpired: 1,
+                        message: custom_message.OTP_EXPIRE
                     });
                 }
                 let data1 = `${email}.${otp}.${expires}`;
-                let newCalculatedHash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
+                let newCalculatedHash = crypto.createHmac("sha256", process.env.OTP_KEY).update(data1).digest("hex");
                 if (newCalculatedHash === hashValue) {
-
                     let hashPass = await bcrypt.hash(password, 10);
                     let insertOne = await conn.collection('users').insertOne({
                         "email": email,
-                        "phoneNumber": phoneNumber,
+                        "phoneNumber": "",
                         "password": hashPass,
                         "isGoogleAccount": 0,
                         "firstName": firstName,
                         "lastName": lastName,
-                        "countryCode": "+91",
-                        "birthDate": "15/07/1998",
+                        "countryCode": "",
+                        "birthDate": "",
                         "isPhoneVerified": 0,
                         "isEmailVerified": 1,
                         "isUserBlocked": 0,
@@ -113,14 +89,15 @@ module.exports = {
                     let myUuid = insertOne.ops[0]._id.toString();
                     const accessToken = await signAccessToken(myUuid)
                     const refreshToken = await signRefreshToken(myUuid)
-                    res.setHeader("refreshToken", myUuid)
-                    res.setHeader("accessToken", accessToken);
                     return res.status(200).json({
                         success: true,
                         status_code: custom_error.CODE_200,
                         status_msg: custom_error.MSG_200,
                         showUser: 1,
+                        isEmailOtpExpired: 0,
                         uuid: myUuid,
+                        accessToken: accessToken,
+                        refreshToken: refreshToken,
                         message: custom_message.USER_CREATED
                     });
                 } else {
@@ -129,12 +106,196 @@ module.exports = {
                         status_code: custom_error.CODE_500,
                         status_msg: custom_error.MSG_500,
                         showUser: 1,
+                        isEmailOtpExpired: 0,
                         message: custom_message.VERIFICATION_FAILED
                     });
                 }
             }
         }
     },
+
+    createEmailOtp: async (req, res, next) => {
+
+        let {
+            email,
+        } = req.body;
+
+        if (email == undefined || email == null || email == "") {
+            return res.status(500).json({
+                success: false,
+                status_code: custom_error.CODE_500,
+                status_msg: custom_error.MSG_500,
+                showUser: 1,
+                message: custom_message.BODY_MISSING_PARAMS
+            });
+        } else if (emailvalidator.validate(email)) {
+            const otp = Math.floor(1000 + Math.random() * 9000);
+            const ttl = 60 * 60 * 1000;
+            const expires = new Date().getTime() + ttl;
+            const otpData = `${email}.${otp}.${expires}`;
+            const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
+            const fullHash = `${hash}.${expires}`;
+            return res.status(200).json({
+                success: true,
+                status_code: custom_error.CODE_200,
+                status_msg: custom_error.MSG_200,
+                showUser: 1,
+                message: custom_message.OTP_SENT,
+                response: {
+                    emailOtpKey: fullHash,
+                    emailOtp: otp
+                }
+            });
+        } else {
+            return res.status(500).json({
+                success: false,
+                status_code: custom_error.CODE_500,
+                status_msg: custom_error.MSG_500,
+                showUser: 1,
+                message: custom_message.EMAIL_VALIDATION
+            });
+        }
+    },
+
+    createPhoneOtp: async (req, res, next) => {
+
+        let {
+            phoneNumber,
+        } = req.body;
+
+        if (phoneNumber == undefined || phoneNumber == null || phoneNumber == "") {
+            return res.status(500).json({
+                success: false,
+                status_code: custom_error.CODE_500,
+                status_msg: custom_error.MSG_500,
+                showUser: 1,
+                message: custom_message.BODY_MISSING_PARAMS
+            });
+        } else if (validatePhoneNumber.validate(phoneNumber)) {
+            const otp = Math.floor(1000 + Math.random() * 9000);
+            const ttl = 60 * 60 * 1000;
+            const expires = new Date().getTime() + ttl;
+            const otpData = `${phoneNumber}.${otp}.${expires}`;
+            const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
+            const fullHash = `${hash}.${expires}`;
+            return res.status(200).json({
+                success: true,
+                status_code: custom_error.CODE_200,
+                status_msg: custom_error.MSG_200,
+                showUser: 1,
+                message: custom_message.OTP_SENT,
+                response: {
+                    emailOtpKey: fullHash,
+                    emailOtp: otp
+                }
+            });
+        } else {
+            return res.status(500).json({
+                success: false,
+                status_code: custom_error.CODE_500,
+                status_msg: custom_error.MSG_500,
+                showUser: 1,
+                message: custom_message.PHONE_VALIDATION
+            });
+        }
+    },
+
+    verifyPhoneOtp: async (req, res, next) => {
+
+        let {
+            uuid,
+            phoneNumber,
+            phoneOtpKey,
+            otp
+        } = req.body;
+
+        if (uuid == undefined || uuid == null || uuid == "" || phoneNumber == undefined || phoneNumber == null || phoneNumber == "" || phoneOtpKey == undefined || phoneOtpKey == null || phoneOtpKey == "" || otp == undefined || otp == null || otp == "") {
+            return res.status(500).json({
+                success: false,
+                status_code: custom_error.CODE_500,
+                status_msg: custom_error.MSG_500,
+                showUser: 1,
+                message: custom_message.BODY_MISSING_PARAMS
+            });
+        } else if (validatePhoneNumber.validate(phoneNumber)) {
+            let [hashValue, expires] = phoneOtpKey.split(".");
+            let now = new Date().getTime();
+            if (now > parseInt(expires)) {
+                return res.status(500).json({
+                    success: false,
+                    status_code: custom_error.CODE_500,
+                    status_msg: custom_error.MSG_500,
+                    showUser: 1,
+                    isPhoneOtpExpired: 1,
+                    message: custom_message.OTP_EXPIRE
+                });
+            }
+            let data1 = `${phoneNumber}.${otp}.${expires}`;
+            let newCalculatedHash = crypto.createHmac("sha256", process.env.OTP_KEY).update(data1).digest("hex");
+            if (newCalculatedHash === hashValue) {
+                let myUuid = new ObjectId(uuid)
+                let check_user = await conn.collection('users').findOne({ _id: !myUuid, phoneNumber: phoneNumber });
+                if (check_user) {
+                    return res.status(500).json({
+                        success: false,
+                        status_code: custom_error.CODE_500,
+                        status_msg: custom_error.MSG_500,
+                        showUser: 1,
+                        message: custom_message.PHONE_FOUND
+                    });
+                } else {
+                    const accessToken = await signAccessToken(uuid)
+                    const refreshToken = await signRefreshToken(uuid)
+                    let updateQuery = { _id: myUuid };
+                    var updateQueryData = { $set: { phoneNumber: phoneNumber, isPhoneVerified: 1 } };
+                    conn.collection('users').updateOne(updateQuery, updateQueryData, function (err, data) {
+                        if (err) {
+                            return res.status(500).json({
+                                success: false,
+                                status_code: custom_error.CODE_500,
+                                status_msg: custom_error.MSG_500,
+                                showUser: 1,
+                                isPhoneOtpExpired: 0,
+                                message: custom_message.DB_CONN_ERROR
+                            });
+                        } else {
+                            return res.status(200).json({
+                                success: true,
+                                status_code: custom_error.CODE_200,
+                                status_msg: custom_error.MSG_200,
+                                showUser: 1,
+                                accessToken: accessToken,
+                                refreshToken: refreshToken,
+                                isPhoneOtpExpired: 0,
+                                message: custom_message.VERIFICATION_SUCCESS
+                            });
+                        }
+                    })
+                }
+            } else {
+                return res.status(500).json({
+                    success: false,
+                    status_code: custom_error.CODE_500,
+                    status_msg: custom_error.MSG_500,
+                    showUser: 1,
+                    isPhoneOtpExpired: 0,
+                    message: custom_message.VERIFICATION_FAILED
+                });
+            }
+        } else {
+            return res.status(500).json({
+                success: false,
+                status_code: custom_error.CODE_500,
+                status_msg: custom_error.MSG_500,
+                showUser: 1,
+                message: custom_message.PHONE_VALIDATION
+            });
+        }
+    },
+
+    //--------------------------------custom-signup-end------------------------
+
+    // -----------------------------custom login start-------------------------------
 
     login: async (req, res, next) => {
 
@@ -159,38 +320,34 @@ module.exports = {
                 message: custom_message.EMAIL_VALIDATION
             });
         } else {
-
             let user_email_check = await conn.collection('users').findOne({ email: email });
-            if(user_email_check.isEmailVerified == 0){
+            if (user_email_check.isEmailVerified == 0) {
                 return res.status(500).json({
                     success: false,
                     status_code: custom_error.CODE_500,
                     status_msg: custom_error.MSG_500,
                     showUser: 1,
-                    message: "Email Not Verified"
+                    message: custom_message.EMAIL_NOT_VERIFY
                 });
-            }else if(user_email_check.isPhoneVerified == 0){
-                return res.status(500).json({
-                    success: false,
-                    status_code: custom_error.CODE_500,
-                    status_msg: custom_error.MSG_500,
-                    showUser: 1,
-                    message: "Phone Not Verified"
-                });
-            }else if (user_email_check.email == email) {
+            } else if (user_email_check.email == email) {
                 const check_pass = await compareSync(password, user_email_check.password);
                 if (check_pass) {
                     let myUuid = user_email_check._id.toString();
-                    const accessToken = await signAccessToken(myUuid)
-                    const refreshToken = await signRefreshToken(myUuid)
-                    res.setHeader("refreshToken", myUuid)
-                    res.setHeader("accessToken", accessToken);
+                    const otp = Math.floor(1000 + Math.random() * 9000);
+                    const ttl = 60 * 60 * 1000;
+                    const expires = new Date().getTime() + ttl;
+                    const otpData = `${email}.${otp}.${expires}`;
+                    const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
+                    const fullHash = `${hash}.${expires}`;
                     return res.status(200).json({
                         success: true,
                         status_code: custom_error.CODE_200,
                         status_msg: custom_error.MSG_200,
                         uuid: myUuid,
                         email: "*****" + email.slice(-15),
+                        isPhoneVerified: user_email_check.isPhoneVerified,
+                        emailOtpKey: fullHash,
+                        otp: otp,
                         message: custom_message.USER_LOGIN
                     });
                 } else {
@@ -214,48 +371,73 @@ module.exports = {
         }
     },
 
-    refreshToken: async (req, res, next) => {
-        try {
-            const { refreshToken } = req.body
-            if (!refreshToken) throw createError.BadRequest()
-            const userId = await verifyRefreshToken(refreshToken)
+    verifyUser: async (req, res, next) => {
 
-            const accessToken = await signAccessToken(userId)
-            const refToken = await signRefreshToken(userId)
-            res.send({ accessToken: accessToken, refreshToken: refToken })
-        } catch (error) {
-            next(error)
-        }
-    },
+        let {
+            email,
+            emailOtpKey,
+            otp
+        } = req.body;
 
-    logout: async (req, res, next) => {
-        try {
-            const { refreshToken } = req.body
-            console.log(refreshToken)
-            if (!refreshToken) throw createError.BadRequest()
-            const userId = await verifyRefreshToken(refreshToken)
-            client.DEL(userId, (err, val) => {
-                if (err) {
-                    console.log(err.message)
-                    throw createError.InternalServerError()
-                }
+        if (email == undefined || email == null || email == "" || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || otp == undefined || otp == null || otp == "") {
+            return res.status(500).json({
+                success: false,
+                status_code: custom_error.CODE_500,
+                status_msg: custom_error.MSG_500,
+                showUser: 1,
+                message: custom_message.BODY_MISSING_PARAMS
+            });
+        } else {
+            let [hashValue, expires] = emailOtpKey.split(".");
+            let now = new Date().getTime();
+            if (now > parseInt(expires)) {
+                return res.status(500).json({
+                    success: false,
+                    status_code: custom_error.CODE_500,
+                    status_msg: custom_error.MSG_500,
+                    showUser: 1,
+                    isEmailOtpExpired: 1,
+                    message: custom_message.OTP_EXPIRE
+                });
+            }
+            let data1 = `${email}.${otp}.${expires}`;
+            let newCalculatedHash = crypto.createHmac("sha256", process.env.OTP_KEY).update(data1).digest("hex");
+            if (newCalculatedHash === hashValue) {
+                let user_email_check = await conn.collection('users').findOne({ email: email });
+                let myUuid = user_email_check._id.toString();
+                const accessToken = await signAccessToken(myUuid)
+                const refreshToken = await signRefreshToken(myUuid)
                 return res.status(200).json({
                     success: true,
                     status_code: custom_error.CODE_200,
                     status_msg: custom_error.MSG_200,
                     showUser: 1,
-                    message: custom_message.USER_LOGOUT
+                    firstName: user_email_check.firstName,
+                    lastName: user_email_check.lastName,
+                    isUserBlocked: user_email_check.isUserBlocked,
+                    isEmailOtpExpired: 0,
+                    accessToken: accessToken,
+                    refreshToken: refreshToken,
+                    message: custom_message.VERIFICATION_SUCCESS
                 });
-            })
-        } catch (error) {
-            next(error)
+            } else {
+                return res.status(500).json({
+                    success: false,
+                    status_code: custom_error.CODE_500,
+                    status_msg: custom_error.MSG_500,
+                    showUser: 1,
+                    isEmailOtpExpired: 0,
+                    message: custom_message.VERIFICATION_FAILED
+                });
+            }
         }
     },
 
+
+    // --------------------------------------custom login end--------------------
+
     getData: async (req, res, next) => {
         try {
-
-            console.log(req)
             conn.collection('users').find().toArray(async (err, data) => {
                 if (err) {
                     return res.status(500).json({
@@ -289,446 +471,4 @@ module.exports = {
             console.log(error)
         }
     },
-
-    createEmailOtp: async (req, res, next) => {
-
-        let {
-            email,
-        } = req.body;
-
-        if (email == undefined || email == null || email == "") {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.BODY_MISSING_PARAMS
-            });
-        } else if (emailvalidator.validate(email)) {
-            const otp = Math.floor(1000 + Math.random() * 9000);
-            const ttl = 60 * 60 * 1000;
-            const expires = new Date().getTime() + ttl;
-            const otpData = `${email}.${otp}.${expires}`;
-            const OTP_KEY = "pnc1234"
-            const hash = crypto.createHmac("sha256", OTP_KEY).update(otpData).digest("hex");
-            const fullHash = `${hash}.${expires}`;
-            return res.status(200).json({
-                success: true,
-                status_code: custom_error.CODE_200,
-                status_msg: custom_error.MSG_200,
-                showUser: 1,
-                message: custom_message.OTP_SENT,
-                response: {
-                    emailOtpKey: fullHash,
-                    emailOtp: otp
-                }
-            });
-        } else {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.EMAIL_VALIDATION
-            });
-        }
-    },
-
-    verifyEmailOtp: async (req, res, next) => {
-
-        let {
-            email,
-            emailOtpKey,
-            otp
-        } = req.body;
-
-        let [hashValue, expires] = emailOtpKey.split(".");
-        const OTP_KEY = "pnc1234"
-        let now = new Date().getTime();
-        if (now > parseInt(expires)) {
-            const otp = Math.floor(1000 + Math.random() * 9000);
-            const ttl = 60 * 60 * 1000;
-            const expires = new Date().getTime() + ttl;
-            const data1 = `${email}.${otp}.${expires}`;
-            const OTP_KEY = "pnc1234"
-            const hash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
-            const fullHash = `${hash}.${expires}`;
-            return res.status(200).json({
-                success: true,
-                status_code: custom_error.CODE_200,
-                status_msg: custom_error.MSG_200,
-                showUser: 1,
-                message: custom_message.OTP_SENT,
-                response: {
-                    emailOtpKey: fullHash,
-                    otp: otp
-                }
-            });
-        }
-        let data1 = `${email}.${otp}.${expires}`;
-        let newCalculatedHash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
-        if (newCalculatedHash === hashValue) {
-            return res.status(200).json({
-                success: true,
-                status_code: custom_error.CODE_200,
-                status_msg: custom_error.MSG_200,
-                showUser: 1,
-                message: custom_message.VERIFICATION_SUCCESS
-            });
-        } else {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.VERIFICATION_FAILED
-            });
-        }
-    },
-
-
-    createPhoneOtp: async (req, res, next) => {
-
-        let {
-            phoneNumber,
-        } = req.body;
-
-        if (phoneNumber == undefined || phoneNumber == null || phoneNumber == "") {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.BODY_MISSING_PARAMS
-            });
-        } else if (validatePhoneNumber.validate(phoneNumber)) {
-
-            let user_phone_check = await conn.collection('users').findOne({ phoneNumber: phoneNumber });
-            if (user_phone_check) {
-                const otp = Math.floor(1000 + Math.random() * 9000);
-                const ttl = 60 * 60 * 1000;
-                const expires = new Date().getTime() + ttl;
-                const otpData = `${phoneNumber}.${otp}.${expires}`;
-                const OTP_KEY = "pnc1234"
-                const hash = crypto.createHmac("sha256", OTP_KEY).update(otpData).digest("hex");
-                const fullHash = `${hash}.${expires}`;
-                return res.status(200).json({
-                    success: true,
-                    status_code: custom_error.CODE_200,
-                    status_msg: custom_error.MSG_200,
-                    showUser: 1,
-                    message: custom_message.OTP_SENT,
-                    response: {
-                        emailOtpKey: fullHash,
-                        emailOtp: otp
-                    }
-                });
-            } else {
-                return res.status(500).json({
-                    success: false,
-                    status_code: custom_error.CODE_500,
-                    status_msg: custom_error.MSG_500,
-                    showUser: 1,
-                    message: custom_message.PHONE_NOT_FOUND
-                });
-            }
-        } else {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.PHONE_VALIDATION
-            });
-        }
-    },
-
-    verifyPhoneOtp: async (req, res, next) => {
-
-        let {
-            phoneNumber,
-            phoneOtpKey,
-            otp
-        } = req.body;
-
-        let [hashValue, expires] = phoneOtpKey.split(".");
-        const OTP_KEY = "pnc1234"
-        let now = new Date().getTime();
-        if (now > parseInt(expires)) {
-            const otp = Math.floor(1000 + Math.random() * 9000);
-            const ttl = 60 * 60 * 1000;
-            const expires = new Date().getTime() + ttl;
-            const data1 = `${phoneNumber}.${otp}.${expires}`;
-            const OTP_KEY = "pnc1234"
-            const hash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
-            const fullHash = `${hash}.${expires}`;
-            return res.status(200).json({
-                success: true,
-                status_code: custom_error.CODE_200,
-                status_msg: custom_error.MSG_200,
-                showUser: 1,
-                message: custom_message.OTP_SENT,
-                response: {
-                    phoneOtpKey: fullHash,
-                    otp: otp
-                }
-            });
-        }
-        let data1 = `${phoneNumber}.${otp}.${expires}`;
-        let newCalculatedHash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
-        if (newCalculatedHash === hashValue) {
-
-            let updateQuery = { phoneNumber: phoneNumber };
-            var updateQueryData = { $set: { isPhoneVerified: 1 } };
-            conn.collection('users').updateOne(updateQuery, updateQueryData, function (err, data) {
-                if (err) {
-                    return res.status(500).json({
-                        success: false,
-                        status_code: custom_error.CODE_500,
-                        status_msg: custom_error.MSG_500,
-                        showUser: 1,
-                        message: custom_message.DB_CONN_ERROR
-                    });
-                } else {
-                    return res.status(200).json({
-                        success: true,
-                        status_code: custom_error.CODE_200,
-                        status_msg: custom_error.MSG_200,
-                        showUser: 1,
-                        message: custom_message.VERIFICATION_SUCCESS
-                    });
-                }
-            })
-        } else {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.VERIFICATION_FAILED
-            });
-        }
-    },
-
-    reset: async (req, res, next) => {
-
-        let {
-            password,
-            newPassword,
-        } = req.body;
-
-        if (password == undefined || password == null || password == "" || newPassword == undefined || newPassword == null || newPassword == "") {
-            return res.status(500).json({
-                success: false,
-                status_code: 500,
-                showUser: 1,
-                message: custom_message.BODY_MISSING_PARAMS
-            });
-        } else {
-            if (password === newPassword) {
-                let myUuid = new ObjectId(req.payload.data)
-                let check_user = await conn.collection('users').findOne({ _id: myUuid });
-                if (check_user) {
-                    let hashPass = await bcrypt.hash(password, 10);
-                    let updateQuery = { _id: myUuid };
-                    var updateQueryData = { $set: { password: hashPass } };
-                    const accessToken = await signAccessToken(req.payload.data)
-                    const refreshToken = await signRefreshToken(req.payload.data)
-                    conn.collection('users').updateOne(updateQuery, updateQueryData, function (err, data) {
-                        if (err) {
-                            return res.status(500).json({
-                                success: false,
-                                status_code: custom_error.CODE_500,
-                                status_msg: custom_error.MSG_500,
-                                showUser: 1,
-                                message: custom_message.DB_CONN_ERROR
-                            });
-                        } else {
-                            res.setHeader("refreshToken", refreshToken)
-                            res.setHeader("accessToken", accessToken);
-                            return res.status(200).json({
-                                success: true,
-                                status_code: custom_error.CODE_200,
-                                status_msg: custom_error.MSG_200,
-                                showUser: 1,
-                                message: "password updated"
-                            });
-                        }
-                    })
-                } else {
-                    return res.status(500).json({
-                        success: false,
-                        status_code: custom_error.CODE_500,
-                        status_msg: custom_error.MSG_500,
-                        showUser: 1,
-                        message: custom_message.USER_NOT_EXIT
-                    });
-                }
-            } else {
-                return res.status(500).json({
-                    success: false,
-                    status_code: custom_error.CODE_500,
-                    status_msg: custom_error.MSG_500,
-                    showUser: 1,
-                    message: "password not matched"
-                });
-            }
-        }
-    },
-
-    forgotPassword: async (req, res, next) => {
-
-        let {
-            email,
-        } = req.body;
-
-        if (email == undefined || email == null || email == "") {
-            return res.status(500).json({
-                success: false,
-                status_code: 500,
-                showUser: 1,
-                message: custom_message.BODY_MISSING_PARAMS
-            });
-        } else if (emailvalidator.validate(email)) {
-            let check_user = await conn.collection('users').findOne({ email: email });
-            if (check_user) {
-                const otp = Math.floor(1000 + Math.random() * 9000);
-                const ttl = 60 * 60 * 1000;
-                const expires = new Date().getTime() + ttl;
-                const otpData = `${email}.${otp}.${expires}`;
-                const OTP_KEY = "pnc1234"
-                const hash = crypto.createHmac("sha256", OTP_KEY).update(otpData).digest("hex");
-                const fullHash = `${hash}.${expires}`;
-                return res.status(200).json({
-                    success: true,
-                    status_code: custom_error.CODE_200,
-                    status_msg: custom_error.MSG_200,
-                    showUser: 1,
-                    message: custom_message.OTP_SENT,
-                    response: {
-                        emailOtpKey: fullHash,
-                        emailOtp: otp
-                    }
-                });
-            } else {
-                return res.status(500).json({
-                    success: false,
-                    status_code: custom_error.CODE_500,
-                    status_msg: custom_error.MSG_500,
-                    showUser: 1,
-                    message: custom_message.EMAIL_NOT_FOUND
-                });
-            }
-        } else {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.EMAIL_VALIDATION
-            });
-        }
-    },
-
-    forgotPassword2: async (req, res, next) => {
-
-        let {
-            email,
-            password,
-            emailOtpKey,
-            otp
-        } = req.body;
-
-        if (email == undefined || email == null || email == "" || password == undefined || password == null || password == "" || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || otp == undefined || otp == null || otp == "") {
-            return res.status(500).json({
-                success: false,
-                status_code: 500,
-                showUser: 1,
-                message: custom_message.BODY_MISSING_PARAMS
-            });
-        } else if (emailvalidator.validate(email)) {
-            let check_user = await conn.collection('users').findOne({ email: email });
-            if (check_user) {
-                let myUuid = check_user._id.toString();
-                let [hashValue, expires] = emailOtpKey.split(".");
-                const OTP_KEY = "pnc1234"
-                let now = new Date().getTime();
-                if (now > parseInt(expires)) {
-                    const otp = Math.floor(1000 + Math.random() * 9000);
-                    const ttl = 60 * 60 * 1000;
-                    const expires = new Date().getTime() + ttl;
-                    const data1 = `${email}.${otp}.${expires}`;
-                    const OTP_KEY = "pnc1234"
-                    const hash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
-                    const fullHash = `${hash}.${expires}`;
-                    return res.status(200).json({
-                        success: true,
-                        status_code: custom_error.CODE_200,
-                        status_msg: custom_error.MSG_200,
-                        showUser: 1,
-                        message: custom_message.OTP_SENT,
-                        response: {
-                            emailOtpKey: fullHash,
-                            otp: otp
-                        }
-                    });
-                }
-                let data1 = `${email}.${otp}.${expires}`;
-                let newCalculatedHash = crypto.createHmac("sha256", OTP_KEY).update(data1).digest("hex");
-                if (newCalculatedHash === hashValue) {
-                    let hashPass = await bcrypt.hash(password, 10);
-                    let updateQuery = { email: email };
-                    var updateQueryData = { $set: { password: hashPass } };
-                    const accessToken = await signAccessToken(myUuid)
-                    const refreshToken = await signRefreshToken(myUuid)
-                    conn.collection('users').updateOne(updateQuery, updateQueryData, function (err, data) {
-                        if (err) {
-                            return res.status(500).json({
-                                success: false,
-                                status_code: custom_error.CODE_500,
-                                status_msg: custom_error.MSG_500,
-                                showUser: 1,
-                                message: custom_message.DB_CONN_ERROR
-                            });
-                        } else {
-                            res.setHeader("refreshToken", refreshToken)
-                            res.setHeader("accessToken", accessToken);
-                            return res.status(200).json({
-                                success: true,
-                                status_code: custom_error.CODE_200,
-                                status_msg: custom_error.MSG_200,
-                                showUser: 1,
-                                message: "password updated"
-                            });
-                        }
-                    })
-                } else {
-                    return res.status(500).json({
-                        success: false,
-                        status_code: custom_error.CODE_500,
-                        status_msg: custom_error.MSG_500,
-                        showUser: 1,
-                        message: custom_message.VERIFICATION_FAILED
-                    });
-                }
-            } else {
-                return res.status(500).json({
-                    success: false,
-                    status_code: custom_error.CODE_500,
-                    status_msg: custom_error.MSG_500,
-                    showUser: 1,
-                    message: custom_message.EMAIL_NOT_FOUND
-                });
-            }
-        } else {
-            return res.status(500).json({
-                success: false,
-                status_code: custom_error.CODE_500,
-                status_msg: custom_error.MSG_500,
-                showUser: 1,
-                message: custom_message.EMAIL_VALIDATION
-            });
-        }
-    }
-
 }

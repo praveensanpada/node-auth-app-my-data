@@ -1,9 +1,8 @@
 const mongoose = require('mongoose')
 
-let mongoose_url = "mongodb+srv://praveen:sanpada@test-database.ib5ey.mongodb.net/?retryWrites=true&w=majority"
 mongoose
-  .connect(mongoose_url, {
-    dbName: "Test-Database",
+  .connect(process.env.MONGODB_URI, {
+    dbName: process.env.dbName,
     useNewUrlParser: true,
     useUnifiedTopology: true,
     useFindAndModify: false,
