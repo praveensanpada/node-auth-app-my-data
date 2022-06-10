@@ -22,10 +22,10 @@ module.exports = {
             lastName,
             password,
             emailOtpKey,
-            otp
+            emailOtp
         } = req.body;
 
-        if (email == undefined || email == null || email == "" || firstName == undefined || firstName == null || firstName == "" || lastName == undefined || lastName == null || lastName == "" || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || otp == undefined || otp == null || otp == "" || password == undefined || password == null || password == "") {
+        if (email == undefined || email == null || email == "" || firstName == undefined || firstName == null || firstName == ""  || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || emailOtp == undefined || emailOtp == null || emailOtp == "" || password == undefined || password == null || password == "") {
             return res.status(500).json({
                 success: false,
                 status_code: custom_error.CODE_500,
@@ -65,7 +65,7 @@ module.exports = {
                         message: custom_message.OTP_EXPIRE
                     });
                 }
-                let data1 = `${email}.${otp}.${expires}`;
+                let data1 = `${email}.${emailOtp}.${expires}`;
                 let newCalculatedHash = crypto.createHmac("sha256", process.env.OTP_KEY).update(data1).digest("hex");
                 if (newCalculatedHash === hashValue) {
                     let hashPass = await bcrypt.hash(password, 10);
@@ -206,10 +206,10 @@ module.exports = {
             uuid,
             phoneNumber,
             phoneOtpKey,
-            otp
+            phoneOtp
         } = req.body;
 
-        if (uuid == undefined || uuid == null || uuid == "" || phoneNumber == undefined || phoneNumber == null || phoneNumber == "" || phoneOtpKey == undefined || phoneOtpKey == null || phoneOtpKey == "" || otp == undefined || otp == null || otp == "") {
+        if (uuid == undefined || uuid == null || uuid == "" || phoneNumber == undefined || phoneNumber == null || phoneNumber == "" || phoneOtpKey == undefined || phoneOtpKey == null || phoneOtpKey == "" || phoneOtp == undefined || phoneOtp == null || phoneOtp == "") {
             return res.status(500).json({
                 success: false,
                 status_code: custom_error.CODE_500,
@@ -230,7 +230,7 @@ module.exports = {
                     message: custom_message.OTP_EXPIRE
                 });
             }
-            let data1 = `${phoneNumber}.${otp}.${expires}`;
+            let data1 = `${phoneNumber}.${phoneOtp}.${expires}`;
             let newCalculatedHash = crypto.createHmac("sha256", process.env.OTP_KEY).update(data1).digest("hex");
             if (newCalculatedHash === hashValue) {
                 let myUuid = new ObjectId(uuid)
@@ -347,7 +347,7 @@ module.exports = {
                         email: "*****" + email.slice(-15),
                         isPhoneVerified: user_email_check.isPhoneVerified,
                         emailOtpKey: fullHash,
-                        otp: otp,
+                        emailOtp: otp,
                         message: custom_message.USER_LOGIN
                     });
                 } else {
@@ -376,10 +376,10 @@ module.exports = {
         let {
             email,
             emailOtpKey,
-            otp
+            emailOtp
         } = req.body;
 
-        if (email == undefined || email == null || email == "" || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || otp == undefined || otp == null || otp == "") {
+        if (email == undefined || email == null || email == "" || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || emailOtp == undefined || emailOtp == null || emailOtp == "") {
             return res.status(500).json({
                 success: false,
                 status_code: custom_error.CODE_500,
@@ -400,7 +400,7 @@ module.exports = {
                     message: custom_message.OTP_EXPIRE
                 });
             }
-            let data1 = `${email}.${otp}.${expires}`;
+            let data1 = `${email}.${emailOtp}.${expires}`;
             let newCalculatedHash = crypto.createHmac("sha256", process.env.OTP_KEY).update(data1).digest("hex");
             if (newCalculatedHash === hashValue) {
                 let user_email_check = await conn.collection('users').findOne({ email: email });
