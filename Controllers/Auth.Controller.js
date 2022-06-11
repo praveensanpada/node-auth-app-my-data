@@ -25,7 +25,7 @@ module.exports = {
             emailOtp
         } = req.body;
 
-        if (email == undefined || email == null || email == "" || firstName == undefined || firstName == null || firstName == ""  || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || emailOtp == undefined || emailOtp == null || emailOtp == "" || password == undefined || password == null || password == "") {
+        if (email == undefined || email == null || email == "" || firstName == undefined || firstName == null || firstName == "" || emailOtpKey == undefined || emailOtpKey == null || emailOtpKey == "" || emailOtp == undefined || emailOtp == null || emailOtp == "" || password == undefined || password == null || password == "") {
             return res.status(500).json({
                 success: false,
                 status_code: custom_error.CODE_500,
@@ -161,9 +161,11 @@ module.exports = {
 
         let {
             phoneNumber,
+            countryCode,
+            uuid
         } = req.body;
 
-        if (phoneNumber == undefined || phoneNumber == null || phoneNumber == "") {
+        if (phoneNumber == undefined || phoneNumber == null || phoneNumber == "" || countryCode == undefined || countryCode == null || countryCode == "" || uuid == undefined || uuid == null || uuid == "") {
             return res.status(500).json({
                 success: false,
                 status_code: custom_error.CODE_500,
@@ -172,23 +174,64 @@ module.exports = {
                 message: custom_message.BODY_MISSING_PARAMS
             });
         } else if (validatePhoneNumber.validate(phoneNumber)) {
-            const otp = Math.floor(1000 + Math.random() * 9000);
-            const ttl = 60 * 60 * 1000;
-            const expires = new Date().getTime() + ttl;
-            const otpData = `${phoneNumber}.${otp}.${expires}`;
-            const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
-            const fullHash = `${hash}.${expires}`;
-            return res.status(200).json({
-                success: true,
-                status_code: custom_error.CODE_200,
-                status_msg: custom_error.MSG_200,
-                showUser: 1,
-                message: custom_message.OTP_SENT,
-                response: {
-                    emailOtpKey: fullHash,
-                    emailOtp: otp
+            let check_user = await conn.collection('users').findOne({ $and: [{ phoneNumber: phoneNumber }, { countryCode: countryCode }] });
+            if (check_user) {
+                if (check_user._id == uuid) {
+                    if (check_user.isPhoneVerified == 1) {
+                        return res.status(500).json({
+                            success: false,
+                            status_code: custom_error.CODE_500,
+                            status_msg: custom_error.MSG_500,
+                            showUser: 1,
+                            message: custom_message.PHONE_VERIFY
+                        });
+                    } else {
+                        const otp = Math.floor(1000 + Math.random() * 9000);
+                        const ttl = 60 * 60 * 1000;
+                        const expires = new Date().getTime() + ttl;
+                        const otpData = `${phoneNumber}.${otp}.${expires}`;
+                        const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
+                        const fullHash = `${hash}.${expires}`;
+                        return res.status(200).json({
+                            success: true,
+                            status_code: custom_error.CODE_200,
+                            status_msg: custom_error.MSG_200,
+                            showUser: 1,
+                            message: custom_message.OTP_SENT,
+                            response: {
+                                phoneOtpKey: fullHash,
+                                phoneOtp: otp
+                            }
+                        });
+                    }
+                } else {
+                    return res.status(500).json({
+                        success: false,
+                        status_code: custom_error.CODE_500,
+                        status_msg: custom_error.MSG_500,
+                        showUser: 1,
+                        message: custom_message.PHONE_FOUND
+                    });
                 }
-            });
+            } else {
+                const otp = Math.floor(1000 + Math.random() * 9000);
+                const ttl = 60 * 60 * 1000;
+                const expires = new Date().getTime() + ttl;
+                const otpData = `${phoneNumber}.${otp}.${expires}`;
+                const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
+                const fullHash = `${hash}.${expires}`;
+                return res.status(200).json({
+                    success: true,
+                    status_code: custom_error.CODE_200,
+                    status_msg: custom_error.MSG_200,
+                    showUser: 1,
+                    message: custom_message.OTP_SENT,
+                    response: {
+                        phoneOtpKey: fullHash,
+                        phoneOtp: otp
+                    }
+                });
+            }
         } else {
             return res.status(500).json({
                 success: false,
@@ -206,10 +249,11 @@ module.exports = {
             uuid,
             phoneNumber,
             phoneOtpKey,
-            phoneOtp
+            phoneOtp,
+            countryCode
         } = req.body;
 
-        if (uuid == undefined || uuid == null || uuid == "" || phoneNumber == undefined || phoneNumber == null || phoneNumber == "" || phoneOtpKey == undefined || phoneOtpKey == null || phoneOtpKey == "" || phoneOtp == undefined || phoneOtp == null || phoneOtp == "") {
+        if (uuid == undefined || uuid == null || uuid == "" || phoneNumber == undefined || phoneNumber == null || phoneNumber == "" || phoneOtpKey == undefined || phoneOtpKey == null || phoneOtpKey == "" || phoneOtp == undefined || phoneOtp == null || phoneOtp == "" || countryCode == undefined || countryCode == null || countryCode == "") {
             return res.status(500).json({
                 success: false,
                 status_code: custom_error.CODE_500,
@@ -218,24 +262,29 @@ module.exports = {
                 message: custom_message.BODY_MISSING_PARAMS
             });
         } else if (validatePhoneNumber.validate(phoneNumber)) {
-            let [hashValue, expires] = phoneOtpKey.split(".");
-            let now = new Date().getTime();
-            if (now > parseInt(expires)) {
-                return res.status(500).json({
-                    success: false,
-                    status_code: custom_error.CODE_500,
-                    status_msg: custom_error.MSG_500,
-                    showUser: 1,
-                    isPhoneOtpExpired: 1,
-                    message: custom_message.OTP_EXPIRE
-                });
-            }
-            let data1 = `${phoneNumber}.${phoneOtp}.${expires}`;
-            let newCalculatedHash = crypto.createHmac("sha256", process.env.OTP_KEY).update(data1).digest("hex");
-            if (newCalculatedHash === hashValue) {
-                let myUuid = new ObjectId(uuid)
-                let check_user = await conn.collection('users').findOne({ _id: !myUuid, phoneNumber: phoneNumber });
-                if (check_user) {
+            let check_user = await conn.collection('users').findOne({ $and: [{ phoneNumber: phoneNumber }, { countryCode: countryCode }] });
+            console.log(check_user)
+            if (check_user) {
+                if (check_user._id == uuid) {
+                    if (check_user.isPhoneVerified == 1) {
+                        return res.status(500).json({
+                            success: false,
+                            status_code: custom_error.CODE_500,
+                            status_msg: custom_error.MSG_500,
+                            showUser: 1,
+                            message: custom_message.PHONE_VERIFY
+                        });
+                    } else {
+                        return res.status(500).json({
+                            success: false,
+                            status_code: custom_error.CODE_500,
+                            status_msg: custom_error.MSG_500,
+                            showUser: 1,
+                            isPhoneOtpExpired: 0,
+                            message: custom_message.VERIFICATION_FAILED
+                        });
+                    }
+                } else {
                     return res.status(500).json({
                         success: false,
                         status_code: custom_error.CODE_500,
@@ -243,44 +292,62 @@ module.exports = {
                         showUser: 1,
                         message: custom_message.PHONE_FOUND
                     });
-                } else {
-                    const accessToken = await signAccessToken(uuid)
-                    const refreshToken = await signRefreshToken(uuid)
-                    let updateQuery = { _id: myUuid };
-                    var updateQueryData = { $set: { phoneNumber: phoneNumber, isPhoneVerified: 1 } };
-                    conn.collection('users').updateOne(updateQuery, updateQueryData, function (err, data) {
-                        if (err) {
-                            return res.status(500).json({
-                                success: false,
-                                status_code: custom_error.CODE_500,
-                                status_msg: custom_error.MSG_500,
-                                showUser: 1,
-                                isPhoneOtpExpired: 0,
-                                message: custom_message.DB_CONN_ERROR
-                            });
-                        } else {
-                            return res.status(200).json({
-                                success: true,
-                                status_code: custom_error.CODE_200,
-                                status_msg: custom_error.MSG_200,
-                                showUser: 1,
-                                accessToken: accessToken,
-                                refreshToken: refreshToken,
-                                isPhoneOtpExpired: 0,
-                                message: custom_message.VERIFICATION_SUCCESS
-                            });
-                        }
-                    })
                 }
             } else {
-                return res.status(500).json({
-                    success: false,
-                    status_code: custom_error.CODE_500,
-                    status_msg: custom_error.MSG_500,
-                    showUser: 1,
-                    isPhoneOtpExpired: 0,
-                    message: custom_message.VERIFICATION_FAILED
-                });
+                let [hashValue, expires] = phoneOtpKey.split(".");
+                let now = new Date().getTime();
+                if (now > parseInt(expires)) {
+                    return res.status(500).json({
+                        success: false,
+                        status_code: custom_error.CODE_500,
+                        status_msg: custom_error.MSG_500,
+                        showUser: 1,
+                        isPhoneOtpExpired: 1,
+                        message: custom_message.OTP_EXPIRE
+                    });
+                } else {
+                    let data1 = `${phoneNumber}.${phoneOtp}.${expires}`;
+                    let newCalculatedHash = crypto.createHmac("sha256", process.env.OTP_KEY).update(data1).digest("hex");
+                    if (newCalculatedHash === hashValue) {
+                        let myUuid = new ObjectId(uuid)
+                        const accessToken = await signAccessToken(uuid)
+                        const refreshToken = await signRefreshToken(uuid)
+                        let updateQuery = { _id: myUuid };
+                        var updateQueryData = { $set: { phoneNumber: phoneNumber, isPhoneVerified: 1, countryCode: countryCode } };
+                        conn.collection('users').updateOne(updateQuery, updateQueryData, function (err, data) {
+                            if (err) {
+                                return res.status(500).json({
+                                    success: false,
+                                    status_code: custom_error.CODE_500,
+                                    status_msg: custom_error.MSG_500,
+                                    showUser: 1,
+                                    isPhoneOtpExpired: 0,
+                                    message: custom_message.DB_CONN_ERROR
+                                });
+                            } else {
+                                return res.status(200).json({
+                                    success: true,
+                                    status_code: custom_error.CODE_200,
+                                    status_msg: custom_error.MSG_200,
+                                    showUser: 1,
+                                    accessToken: accessToken,
+                                    refreshToken: refreshToken,
+                                    isPhoneOtpExpired: 0,
+                                    message: custom_message.VERIFICATION_SUCCESS
+                                });
+                            }
+                        })
+                    } else {
+                        return res.status(500).json({
+                            success: false,
+                            status_code: custom_error.CODE_500,
+                            status_msg: custom_error.MSG_500,
+                            showUser: 1,
+                            isPhoneOtpExpired: 0,
+                            message: custom_message.VERIFICATION_FAILED
+                        });
+                    }
+                }
             }
         } else {
             return res.status(500).json({

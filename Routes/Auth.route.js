@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const AuthController = require('../Controllers/Auth.Controller')
-
+const { verifyAccessToken } = require("../helpers/jwt_helper")
 
 router.post('/signup', AuthController.signup)
 router.post('/send-email-otp', AuthController.createEmailOtp)

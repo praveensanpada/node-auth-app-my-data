@@ -13,6 +13,7 @@ module.exports = {
     PHONE_FOUND: "Phone found",
     EMAIL_NOT_VERIFY: "Email not verified",
     PHONE_NOT_VERIFY: "Phone not verified",
+    PHONE_VERIFY: "Phone Already verified",
 
     EMAIL_VALIDATION: "Please enter correct email id",
     PHONE_VALIDATION: "Please enter correct phone number",
