@@ -199,7 +199,8 @@ module.exports = {
                         const otpData = `${phoneNumber}.${otp}.${expires}`;
                         const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
                         const fullHash = `${hash}.${expires}`;
-                        helperFunction.sendPhoneOtpMessage(phoneNumber, phoneOtp, phoneOtpKey)
+                        var phone_complete = countryCode + phoneNumber
+                        helperFunction.sendPhoneOtpMessage(phone_complete, otp, fullHash)
                         return res.status(200).json({
                             success: true,
                             status_code: custom_error.CODE_200,
@@ -226,7 +227,8 @@ module.exports = {
                 const otpData = `${phoneNumber}.${otp}.${expires}`;
                 const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
                 const fullHash = `${hash}.${expires}`;
-                helperFunction.sendPhoneOtpMessage(phoneNumber, phoneOtp, phoneOtpKey)
+                var phone_complete = countryCode + phoneNumber
+                helperFunction.sendPhoneOtpMessage(phone_complete, otp, fullHash)
                 return res.status(200).json({
                     success: true,
                     status_code: custom_error.CODE_200,
