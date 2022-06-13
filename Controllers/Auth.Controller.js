@@ -8,6 +8,7 @@ const validatePhoneNumber = require('validate-phone-number-node-js');
 const crypto = require('crypto');
 var custom_message = require("../custom/custom_message")
 var custom_error = require("../custom/custom_error")
+var helperFunction = require("../helperFunction/helperFunction")
 var ObjectId = require('mongodb').ObjectId;
 
 module.exports = {
@@ -43,7 +44,6 @@ module.exports = {
             });
         } else {
             let user_email_check = await conn.collection('users').find({ email: email }).toArray();
-            console.log(user_email_check)
             if (user_email_check.length > 0) {
                 return res.status(500).json({
                     success: false,
@@ -96,8 +96,6 @@ module.exports = {
                         showUser: 1,
                         isEmailOtpExpired: 0,
                         uuid: myUuid,
-                        accessToken: accessToken,
-                        refreshToken: refreshToken,
                         message: custom_message.USER_CREATED
                     });
                 } else {
@@ -129,23 +127,32 @@ module.exports = {
                 message: custom_message.BODY_MISSING_PARAMS
             });
         } else if (emailvalidator.validate(email)) {
-            const otp = Math.floor(1000 + Math.random() * 9000);
-            const ttl = 60 * 60 * 1000;
-            const expires = new Date().getTime() + ttl;
-            const otpData = `${email}.${otp}.${expires}`;
-            const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
-            const fullHash = `${hash}.${expires}`;
-            return res.status(200).json({
-                success: true,
-                status_code: custom_error.CODE_200,
-                status_msg: custom_error.MSG_200,
-                showUser: 1,
-                message: custom_message.OTP_SENT,
-                response: {
+            let user_email_check = await conn.collection('users').find({ email: email }).toArray();
+            if (user_email_check.length > 0) {
+                return res.status(500).json({
+                    success: false,
+                    status_code: custom_error.CODE_500,
+                    status_msg: custom_error.MSG_500,
+                    showUser: 1,
+                    message: custom_message.EMAIL_FOUND
+                });
+            } else {
+                const otp = Math.floor(1000 + Math.random() * 9000);
+                const ttl = 60 * 60 * 1000;
+                const expires = new Date().getTime() + ttl;
+                const otpData = `${email}.${otp}.${expires}`;
+                const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
+                const fullHash = `${hash}.${expires}`;
+                return res.status(200).json({
+                    success: true,
+                    status_code: custom_error.CODE_200,
+                    status_msg: custom_error.MSG_200,
+                    showUser: 1,
                     emailOtpKey: fullHash,
-                    emailOtp: otp
-                }
-            });
+                    emailOtp: otp,
+                    message: custom_message.OTP_SENT
+                });
+            }
         } else {
             return res.status(500).json({
                 success: false,
@@ -192,16 +199,15 @@ module.exports = {
                         const otpData = `${phoneNumber}.${otp}.${expires}`;
                         const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
                         const fullHash = `${hash}.${expires}`;
+                        helperFunction.sendPhoneOtpMessage(phoneNumber, phoneOtp, phoneOtpKey)
                         return res.status(200).json({
                             success: true,
                             status_code: custom_error.CODE_200,
                             status_msg: custom_error.MSG_200,
                             showUser: 1,
-                            message: custom_message.OTP_SENT,
-                            response: {
-                                phoneOtpKey: fullHash,
-                                phoneOtp: otp
-                            }
+                            phoneOtpKey: fullHash,
+                            phoneOtp: otp,
+                            message: custom_message.OTP_SENT
                         });
                     }
                 } else {
@@ -220,16 +226,15 @@ module.exports = {
                 const otpData = `${phoneNumber}.${otp}.${expires}`;
                 const hash = crypto.createHmac("sha256", process.env.OTP_KEY).update(otpData).digest("hex");
                 const fullHash = `${hash}.${expires}`;
+                helperFunction.sendPhoneOtpMessage(phoneNumber, phoneOtp, phoneOtpKey)
                 return res.status(200).json({
                     success: true,
                     status_code: custom_error.CODE_200,
                     status_msg: custom_error.MSG_200,
                     showUser: 1,
-                    message: custom_message.OTP_SENT,
-                    response: {
-                        phoneOtpKey: fullHash,
-                        phoneOtp: otp
-                    }
+                    phoneOtpKey: fullHash,
+                    phoneOtp: otp,
+                    message: custom_message.OTP_SENT
                 });
             }
         } else {
@@ -263,7 +268,6 @@ module.exports = {
             });
         } else if (validatePhoneNumber.validate(phoneNumber)) {
             let check_user = await conn.collection('users').findOne({ $and: [{ phoneNumber: phoneNumber }, { countryCode: countryCode }] });
-            console.log(check_user)
             if (check_user) {
                 if (check_user._id == uuid) {
                     if (check_user.isPhoneVerified == 1) {

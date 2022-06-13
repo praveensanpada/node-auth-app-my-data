@@ -1,8 +1,8 @@
 const redis = require('redis')
 
 const client = redis.createClient({
-  port: 6378,
-  host: 'nodedb-001.hhtihc.0001.usw2.cache.amazonaws.com',
+  port: process.env.REDIS_PORT,
+  host: process.env.REDIS_HOST_URL,
   // password: "password"
 })
 
