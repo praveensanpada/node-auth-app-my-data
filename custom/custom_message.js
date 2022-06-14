@@ -11,6 +11,7 @@ module.exports = {
     EMAIL_PHONE_FOUND: "Email/Phone found",
     EMAIL_FOUND: "Email found",
     PHONE_FOUND: "Phone found",
+    
     EMAIL_NOT_VERIFY: "Email not verified",
     PHONE_NOT_VERIFY: "Phone not verified",
     PHONE_VERIFY: "Phone Already verified",
